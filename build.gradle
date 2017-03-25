@@ -1,0 +1,48 @@
+ext.environments = ["dev", "int", "prod"]
+
+task writeDefaultProperties(type: WriteEnvironmentProperties) {
+	environmentProperties file('environment.properties.groovy')
+	targetFolder file('properties')
+}
+
+environments.each { String env ->
+	task "write${env.capitalize()}Properties"(type: WriteEnvironmentProperties) {
+		environment env
+		environmentProperties file('environment.properties.groovy')
+		targetFolder file('properties')
+	}
+}
+
+task writeProperties {
+	dependsOn writeDefaultProperties
+	dependsOn += environments.collect {"write${it.capitalize()}Properties"}
+}
+
+class WriteEnvironmentProperties extends DefaultTask {
+
+	@Input
+	@Optional
+	String environment
+	
+	@InputFile
+	File environmentProperties
+	
+	@OutputDirectory
+	File targetFolder
+	
+	@TaskAction
+	void writeProperties() {
+		String propsFilePrefix = environment ?: "local" 
+		File propsFile = new File(targetFolder, propsFilePrefix + ".properties")
+		propsFile.delete()
+		if (!targetFolder.exists()) {
+			targetFolder.mkdirs()
+		}
+		ConfigObject config = new ConfigSlurper(environment).parse(environmentProperties.toURL())
+		config.each { envKey, envValues ->
+			envValues.toProperties().sort().each {
+				propsFile << "$envKey.$it\n"
+			}
+		}
+	}
+}
